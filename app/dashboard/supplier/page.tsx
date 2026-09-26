@@ -3,32 +3,32 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
-import { openRazorpayCheckout } from '@/lib/razorpay'; // Import Razorpay payment trigger
+import { openRazorpayCheckout } from '@/lib/razorpay';
 import Link from 'next/link';
 import { 
   LayoutDashboard, Box, MessageSquare, Settings, 
   LogOut, Plus, Bell, CalendarClock, ShieldCheck, 
   Camera, Truck, CheckCircle, Clock, X, Loader2, 
-  Inbox, UploadCloud, Trash2, AlertCircle, Navigation, CreditCard, Star, Building2, MapPin
+  Inbox, UploadCloud, Trash2, AlertCircle, Navigation, CreditCard, Star, Building2, MapPin, Lock
 } from 'lucide-react';
 
 export default function SupplierDashboard() {
   const [isMounted, setIsMounted] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [greeting, setGreeting] = useState('');
-  
+   
   // Real Database States
   const [inventory, setInventory] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+   
   // Profile State for Subscription & Settings Banner
   const [profile, setProfile] = useState({
-    subscription_status: 'Trial (Hackathon Demo)',
+    subscription_status: 'Active Provider Plan',
     provider_rating: 5.0,
     logo_data: ''
   });
-  
+   
   // Modal & Form State
   const [showListingModal, setShowListingModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,7 +36,7 @@ export default function SupplierDashboard() {
   const [category, setCategory] = useState('Furniture');
   const [dailyRate, setDailyRate] = useState('');
   const [securityDeposit, setSecurityDeposit] = useState('');
-  
+   
   // Image Upload State
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +63,7 @@ export default function SupplierDashboard() {
     if (invData) setInventory(invData);
     if (reqData) setRequests(reqData);
     if (profData) setProfile(prev => ({ ...prev, ...profData }));
-    
+     
     setIsLoading(false);
   };
 
@@ -78,7 +78,6 @@ export default function SupplierDashboard() {
     }
   };
 
-  // 🚀 PUBLISH LISTING BOUND TO REAL SUPABASE PROFILE COORDINATES
   const handlePublishListing = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -144,26 +143,86 @@ export default function SupplierDashboard() {
 
   if (!isMounted) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading VenueX...</div>;
 
+  // 30-Day Subscription Validation Check for Suppliers
+  const isSubscriptionPending = !profile.subscription_status || 
+                               profile.subscription_status.toLowerCase().includes('pending') || 
+                               profile.subscription_status.toLowerCase().includes('expired') ||
+                               profile.subscription_status.toLowerCase().includes('trial');
+
   const pendingRequests = requests.filter(r => r.status === 'Pending Review');
   const activeExchanges = requests.filter(r => r.status === 'Approved');
   const totalDepositsHeld = activeExchanges.reduce((sum, req) => sum + Number(req.security_deposit || 0), 0);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans">
+    <div className="min-h-screen bg-slate-50 flex font-sans relative">
+      {/* 🔒 SUPPLIER SUBSCRIPTION LOCK SCREEN OVERLAY */}
+      {isSubscriptionPending && (
+        <div className="absolute inset-0 z-50 bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-200 text-center space-y-6"
+          >
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-8 h-8" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">Supplier Subscription Required</h2>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                Welcome to VenueX! Complete your 30-day provider platform subscription via Razorpay to unlock your inventory management, active exchanges, and zero-commission payout channels[cite: 1].
+              </p>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <span className="font-semibold">Provider Operations Plan:</span>
+              <span className="font-bold text-slate-900">₹2,999 / 30 days</span>
+            </div>
+            <button 
+              onClick={() => {
+                openRazorpayCheckout({
+                  amount: 2999,
+                  name: businessName,
+                  description: "venueX 30-Day Provider Subscription",
+                  onSuccess: async (paymentId) => {
+                    await supabase.from('business_profiles').upsert([{
+                      business_name: businessName,
+                      business_type: 'Hotel/Vendor',
+                      subscription_status: 'Active Provider Plan'
+                    }], { onConflict: 'business_name' });
+
+                    setProfile(prev => ({ ...prev, subscription_status: 'Active Provider Plan' }));
+                    alert(`Payment Successful! (Ref: ${paymentId})\nYour 30-day provider subscription is now active.`);
+                  }
+                });
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-2xl transition-all shadow-lg flex items-center justify-center space-x-2"
+            >
+              <CreditCard className="w-5 h-5" />
+              <span>Activate Provider Plan (₹2,999)</span>
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
+            >
+              Log out of account
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       {/* SUPPLIER SIDEBAR */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col hidden md:flex fixed h-full z-20">
         <div className="p-6 flex items-center space-x-3 mb-6">
           <div className="p-2 bg-blue-600 text-white rounded-lg"><LayoutDashboard className="w-6 h-6" /></div>
           <span className="text-2xl font-bold text-white tracking-tight">venueX</span>
         </div>
-        
+         
         <nav className="flex-1 px-4 space-y-2">
           <SidebarItem href="/dashboard/supplier" icon={<LayoutDashboard />} label="Dashboard" active />
           <SidebarItem href="/dashboard/supplier/confirmations" icon={<CalendarClock />} label="Confirmations" badge={pendingRequests.length > 0 ? pendingRequests.length : undefined} />
           <SidebarItem href="/dashboard/supplier/exchanges" icon={<Truck />} label="Active Exchanges" />
           <SidebarItem href="/dashboard/supplier/settings" icon={<Settings />} label="Settings & Profile" />
         </nav>
-        
+         
         <div className="p-4 mt-auto border-t border-slate-800">
           <div className="flex items-center space-x-3 mb-4 px-2">
             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold uppercase overflow-hidden">
@@ -199,7 +258,7 @@ export default function SupplierDashboard() {
 
         <div className="p-8 flex-1 overflow-y-auto">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-            
+             
             {/* ESCROW & METRICS BANNER */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-gradient-to-br from-blue-900 to-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col justify-between">
@@ -234,41 +293,44 @@ export default function SupplierDashboard() {
               </div>
             </div>
 
-            {/* 🚀 RAZORPAY SUBSCRIPTION & UPGRADE BANNER FOR SUPPLIERS */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+            {/* 🚀 30-DAY SUBSCRIPTION STATUS BANNER */}
+            <div className="bg-slate-900 text-white rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                   <CreditCard className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-blue-900 text-base">Subscription Status: <span className="text-blue-600">{profile.subscription_status}</span></h4>
-                  <p className="text-sm text-blue-700">Upgrade to Pro Supplier via Razorpay to unlock zero commission and verified badge priority.</p>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 bg-blue-500/20 px-2.5 py-0.5 rounded-full border border-blue-400/20">30-Day Billing Cycle</span>
+                    <span className="text-sm font-bold text-slate-200">{profile.subscription_status}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-xl">Independent 30-day listing subscription active. 100% of rental payments and security deposits flow directly to you with zero marketplace commissions[cite: 1].</p>
                 </div>
               </div>
               <button 
                 onClick={() => {
                   openRazorpayCheckout({
-                    amount: 2999, // ₹2,999 platform subscription
+                    amount: 2999,
                     name: businessName,
-                    description: "venueX Supplier Pro Subscription Fee",
+                    description: "venueX 30-Day Provider Subscription",
                     onSuccess: async (paymentId) => {
                       const { error } = await supabase
                         .from('business_profiles')
-                        .update({ subscription_status: 'Pro Verified (Active)' })
+                        .update({ subscription_status: 'Active Provider Plan' })
                         .eq('business_name', businessName);
 
                       if (!error) {
-                        setProfile(prev => ({ ...prev, subscription_status: 'Pro Verified (Active)' }));
-                        alert(`Payment Successful! (Ref: ${paymentId})\nYour supplier account has been upgraded to Pro.`);
+                        setProfile(prev => ({ ...prev, subscription_status: 'Active Provider Plan' }));
+                        alert(`Payment Successful! (Ref: ${paymentId})\nYour 30-day subscription is active.`);
                       } else {
                         alert("Error updating subscription: " + error.message);
                       }
                     }
                   });
                 }}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-sm transition-colors whitespace-nowrap"
               >
-                Upgrade via Razorpay (₹2,999)
+                Renew 30-Day Plan (₹2,999)
               </button>
             </div>
 
@@ -291,7 +353,7 @@ export default function SupplierDashboard() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
+               
               {/* INVENTORY LIST */}
               <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-200 flex justify-between items-center">
@@ -325,7 +387,7 @@ export default function SupplierDashboard() {
                             <p className="text-sm text-slate-500 mt-0.5">{item.category} • <span className="font-medium text-slate-700">₹{item.daily_rate}/day</span></p>
                           </div>
                         </div>
-                        
+                         
                         <div className="flex items-center space-x-4">
                           <span className={`px-4 py-1.5 rounded-full text-xs font-bold ${item.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                             {item.status}
@@ -383,7 +445,7 @@ export default function SupplierDashboard() {
                 <h2 className="text-xl font-bold text-slate-900">List & Verify New Resource</h2>
                 <button type="button" onClick={() => setShowListingModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
               </div>
-              
+               
               <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Resource Photo (Authentic Verification)</label>
